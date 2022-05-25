@@ -1,9 +1,13 @@
+import random
+
 import requests
 from bs4 import BeautifulSoup as bsoup
+from prettytable import PrettyTable
 import time
 import logging
 
-URL = 'https://www.fl.ru/search/?type=projects&action=search&search_string=python&search_hint=Next%2Bgen&page=1'
+KEYWORD = 'php'
+PAGE_COUNT = 2
 PROXIES = {
     'HTTP': '91.144.140.125:8080',
     'HTTPS': '77.50.104.110:3128'
@@ -29,16 +33,49 @@ def configure_logging():
 
     log.setLevel(logging.DEBUG)
 
+def prepare_url(word='python', page=1):
+    url = f'https://www.fl.ru/search/?type=projects&action=search&search_string={str(word).lower()}&search_hint=Next%2Bgen&page={page}'
+    return url
+
+def print_result(table):
+    th = ["NAME", "PRICE"]
+    td = table
+    columns = len(th)
+    ptable = PrettyTable(th)
+    td_data = td[:]
+
+    while td_data:
+        ptable.add_row(td_data[:columns])
+        td_data = td_data[columns:]
+
+    print(ptable)
+
+def delay():
+    value = random.random()
+    scaled_value = 1 + (value * (9 - 5))
+    log.info(f"DELAY - {scaled_value} SEC.")
+    time.sleep(scaled_value)
+
 def start_parsing():
-    response = requests.get(URL, headers=HEADERS)
-    html_text = response.text
-    log.info(f'STATUS CODE - {response.status_code}')
+    for i in range(1, PAGE_COUNT):
+        url = prepare_url(word=KEYWORD, page=i)
+        response = requests.get(url, headers=HEADERS)
+        html_text = response.text
+        log.info(f'STATUS CODE - {response.status_code}')
+        soup = bsoup(html_text, 'html.parser')
+        order_data = soup.find_all('div', class_='search-item-body')
 
-    soup = bsoup(html_text, 'html.parser')
-    order_data = soup.find_all('div', class_='search-item-body')
-    orders.extend(order_data)
+        if order_data != []:
+            orders.extend(order_data)
+            #   Задержка для парсера
+            delay()
+        else:
+            log.info("EMPTY")
+            break
 
-    for i in range(0, 5):
+    result = []
+
+    for i in range(len(orders)):
         info_order = orders[i]
         title = info_order.find('a').text
         price = info_order.find('span', class_='search-price')
@@ -48,9 +85,10 @@ def start_parsing():
         else:
             price = "Договорная"
 
-        print(title, price)
+        result.extend([title])
+        result.extend([price])
 
-
+    print_result(result)
 
 if __name__ == '__main__':
     configure_logging()
